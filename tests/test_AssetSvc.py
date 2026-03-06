@@ -1,7 +1,7 @@
 import os
 import pytest
 
-from src.Model import JsonFile
+from AssetServiceController.Model import JsonFile
 
 class TestLoadAssets:
     goodDataFile = os.path.join(

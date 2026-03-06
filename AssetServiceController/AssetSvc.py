@@ -36,7 +36,7 @@ def _load_assets(dataFile: JsonFile) -> dict:
     """
     ensure_json_file(dataFile)
 
-def ingest_data(dataFile: str) -> None:
+def batch_ingest_data(dataFile: str) -> None:
     """
     Take a json file array of assets/assetVersions and add to database.
     Type models validate by checking if each individual item is either
@@ -46,9 +46,15 @@ def ingest_data(dataFile: str) -> None:
     steps:
     - load json as dict
     - iterate through items
+        - validate through type models
+        - if asset, add to asset insertion set
+        - if assetVersion, add to assetVersion insertion set
+        - if either is invalid, add neither to set
+        - if not asset (already has an asset id) add to different assetVersion set.
+    - at this point there should be two equal arrays of pre-insertion asset and asset version data.
+    - batch add assets, the asset ids should be aligned with the assetVersion count.
+
     """
-
-
     pass
 
 def add_asset(asset: Asset) -> int:
