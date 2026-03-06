@@ -27,6 +27,7 @@ def connection():
     """
     con = sqlite3.connect("db.sqlite3")
     con.row_factory = dict_factory
+    con.execute("PRAGMA foreign_keys = ON;") # need for foreign keys.
     return con
 
 
@@ -41,7 +42,7 @@ def with_db_manager():
             db_manager = None
             try:
                 db_manager = DBManager()
-                return func(db_manager, *args, **kwargs)
+                return func(*args, **kwargs, mgr=db_manager)
             finally:
                 print("Closing DB connection...")
                 db_manager.session.close()
@@ -140,12 +141,17 @@ class DBManager:
         RETURNING id;
         """
 
-        ids = []
-        for asset in assets:
-            cursor = self.session.execute(cmd, asset.model_dump())
-            ids.append(cursor.fetchone()[0])
-        self.session.commit()
-        return ids
+        try:
+            ids = []
+            for asset in assets:
+                cursor = self.session.execute(cmd, asset.model_dump())
+                ids.append(cursor.fetchone()["id"])
+            self.session.commit()
+            return ids
+        except (sqlite3.IntegrityError, sqlite3.ProgrammingError) as e:
+            self.logger.error(f"Error inserting assets: {e}")
+            self.session.rollback()
+            raise e
 
     def insert_asset_versions(self, asset_versions: list[AssetVersion]) -> list[int]:
         """
@@ -158,36 +164,41 @@ class DBManager:
         :returns: <array[int]> array of inserted asset version ids.
         """
         # NOTE - need to handle duplicate conflicts and return id of existing record.
+
         cmd = """
         INSERT INTO asset_versions (asset, department, version, status)
         VALUES (:asset, :department, :version, :status)
         RETURNING id;
         """
 
-    def list_assets(self) -> dict:
+        try:
+            ids = []
+            for asset_version in asset_versions:
+                cursor = self.session.execute(cmd, asset_version.model_dump())
+                ids.append(cursor.fetchone()["id"])
+            self.session.commit()
+            return ids
+        except (sqlite3.IntegrityError, sqlite3.ProgrammingError) as e:
+            self.logger.error(f"Error inserting asset versions: {e}")
+            self.session.rollback()
+            raise e
+
+    def list_assets(self) -> list[dict]:
         """
-        Return an array of asset records.
+        :returns: <array[dict]> array of all asset records.
         """
-        pass
+
+        cmd = """SELECT * FROM assets;"""
+        cursor = self.session.execute(cmd)
+        # return [record for record in cursor.fetchall()]
+        return cursor.fetchall()
     
-    def list_asset_versions(self) -> dict:
+    def list_asset_versions(self) -> list[dict]:
         """
-        Return an array of asset version records.
+        :returns: <array[dict]> array of all asset version records.
         """
-        pass
 
-
-if __name__ == "__main__":
-    """
-    Example usage of with_db_manager.
-    Allows for multiple operations with a DBManager instance without
-    having to worry about connection housekeeping.
-    """
-    @with_db_manager()
-    def cycle_tables(mgr: DBManager):
-        mgr.drop_table("asset") 
-        mgr.drop_table("asset_versions") 
-        mgr.create_tables()
-
-        mgr.ensure_table("assets")
-        mgr.ensure_table("asset_versions")
+        cmd = """SELECT * FROM asset_versions;"""
+        cursor = self.session.execute(cmd)
+        # return [record for record in cursor.fetchall()]
+        return cursor.fetchall()
