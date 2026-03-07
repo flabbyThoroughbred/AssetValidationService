@@ -1,6 +1,7 @@
 import json
 
 from .Model import JsonFile, Asset, AssetVersionJson, AssetVersion, AssetType
+from .DbManager import DBManager, with_db_manager
 
 """
 Directly accessible from other APIs. Higher-level. Just pass in your data
@@ -69,19 +70,22 @@ def batch_ingest_data(dataFile: str) -> None:
     pass
 
 
-def add_asset(asset: Asset) -> int:
+@with_db_manager()
+def add_asset(asset_name: str, asset_type: str, mgr: DBManager) -> int:
     """
     Add single asset to database.
 
-    :param asset: <Asset> asset to be added. Must conform to type Asset.
+    :param asset_name: <str> name of asset to be added.
+    :param asset_type: <str> type of asset to be added.
 
     :returns: <int> id of inserted asset record. If asset already exists,
     return id of existing record.
     """
-    pass
+    ids = mgr.insert_assets([Asset(name=asset_name, type=asset_type)])
+    return ids[0]
 
-
-def add_asset_version(assetVersion: AssetVersion) -> int:
+@with_db_manager()
+def add_asset_version(assetVersionData: dict, mgr: DBManager) -> int:
     """
     Add single asset version to database.
 
