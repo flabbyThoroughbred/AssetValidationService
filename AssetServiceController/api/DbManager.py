@@ -4,6 +4,8 @@ from functools import wraps
 from .Model import Asset, AssetVersion, AssetType, Department, Status
 from .Logger import create_logger
 
+_logger = create_logger("DBManager")
+
 """
 Was considering using SQLAlchemy or SQLModel but going to stick with
 pydantic + sqlite3 for now. This means that type enforcement is a bit
@@ -65,7 +67,7 @@ def with_db_manager():
                 db_manager = DBManager()
                 return func(*args, **kwargs, mgr=db_manager)
             finally:
-                print("Closing DB connection...")
+                _logger.info("Closing DB connection...")
                 db_manager.session.close()
         return wrapper
     return mgr_wrapper
@@ -80,7 +82,7 @@ class DBManager:
     """
     def __init__(self):
         self.session = connection()
-        self.logger = create_logger("DBManager")
+        self.logger = _logger
 
     def ensure_table(self, table_name: str) -> None:
         """
@@ -145,8 +147,8 @@ class DBManager:
             CREATE TABLE IF NOT EXISTS fails (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 fail_data JSON NOT NULL,
-                loc TEXT NOT NULL,
-                type TEXT NOT NULL,
+                loc TEXT,
+                type TEXT,
                 msg TEXT NOT NULL
             );
         """
@@ -264,11 +266,11 @@ class DBManager:
             raise e
 
     def retrieve_single_asset(self, asset_name: str,
-    asset_type: str) -> dict | None:
+    asset_type: str) -> tuple[dict, None]:
         """
         Retrieve a single asset given both and asset name and type.
 
-        :param asset_name: <str> pre-validated name of the asset to retrieve.
+        :param asset_name: <str> name of the asset to retrieve.
         :param asset_type: <str> pre-validated type of asset to retrieve.
 
         :returns: <dict> the retrieved record or None if it doesn't exist.
@@ -284,7 +286,35 @@ class DBManager:
         )
         return cursor.fetchone()
     
-    def list_all_assets(self) -> list[dict] | []:
+    def retrieve_single_asset_version(self,  asset_name: str,
+    asset_type: str, version_num: int) -> tuple[dict | None]:
+        """
+        Retrieve a single asset version given asset name, type and version.
+
+        :param asset_name: <str> name of the asset to retrieve.
+        :param asset_type: <str> pre-validated type of asset to retrieve.
+        :param version: <int> version number.
+
+        :returns: <dict> the retrieved record or None if it doesn't exist.
+        """
+
+        cmd = """
+            SELECT av.* FROM asset_versions av
+            JOIN assets a ON av.asset = a.id
+            WHERE a.name = :asset_name AND a.type = :asset_type
+            AND av.version = :version_num;
+        """
+        cursor = self.session.execute(
+            cmd,
+            {
+                "asset_name": asset_name,
+                "asset_type": asset_type,
+                "version_num": version_num
+            }
+        )
+        return cursor.fetchone()
+
+    def list_all_assets(self) -> tuple[list[dict], list]:
         """
         :returns: <array[dict]> array of all asset records or empty array
         if none are found.
@@ -295,7 +325,7 @@ class DBManager:
         return cursor.fetchall()
     
     def list_asset_versions(self, asset_name: str,
-    asset_type: str) -> list[dict] | []:
+    asset_type: str) -> tuple[list[dict], list]:
         """
         List all of an asset's versions by name and type.
 
@@ -310,9 +340,9 @@ class DBManager:
         # records as our result.
 
         cmd = """
-        SELECT av* FROM asset_versions av
-        JOIN assets a ON av.asset = a.id
-        WHERE a.name = :asset_name AND a.type = :asset_type;
+            SELECT av.* FROM asset_versions av
+            JOIN assets a ON av.asset = a.id
+            WHERE a.name = :asset_name AND a.type = :asset_type;
         """
 
         cursor = self.session.execute(
@@ -321,7 +351,7 @@ class DBManager:
         )
         return cursor.fetchall()
     
-    def list_all_asset_versions(self) -> list[dict] | []:
+    def list_all_asset_versions(self) -> tuple[list[dict], list]:
         """
         List all asset versions in the table.
 
@@ -330,5 +360,10 @@ class DBManager:
         """
 
         cmd = """SELECT * FROM asset_versions;"""
+        cursor = self.session.execute(cmd)
+        return cursor.fetchall()
+    
+    def list_all_failed_items(self) -> tuple[list[dict], list]:
+        cmd = """SELECT * FROM fails;"""
         cursor = self.session.execute(cmd)
         return cursor.fetchall()

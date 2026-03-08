@@ -1,6 +1,6 @@
 from enum import Enum
 from pydantic import BaseModel, PositiveInt, FilePath
-
+from typing import Optional
 
 # ===== Enumerated value types ================================================
 class AssetType(str, Enum):
@@ -48,7 +48,17 @@ class AssetVersionJson(BaseModel):
 
 class AssetVersion(AssetVersionJson):
     asset: int # asset id, foreign key to Asset table
+
+
+class AssetVersionLite(AssetVersionJson):
+    """
+    Helper type to avoid cases where an AssetVersion may not 
+    have as asset value initially. Such cases may be when an asset
+    and an asset version are provided separately.
+    """
+    asset: Optional[Asset|int] = None
 # =============================================================================
+
 
 # ==== Type Models ============================================================
 class JsonFile(BaseModel):

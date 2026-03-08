@@ -2,9 +2,12 @@ import json
 import os
 import pytest
 import tempfile
+from pydantic import ValidationError
 
 from AssetServiceController.api.Model import JsonFile
-from AssetServiceController.api.AssetSvc import ensure_json_file
+import AssetServiceController.api.AssetSvc as assetSvc
+
+from utils import build_tables, drop_tables, with_table_lifecycle, DBManager
 
 def create_mock_json_file(payload: list[dict], suffix=".json") -> str:
     """
@@ -60,7 +63,7 @@ class TestLoadAssets:
         _file = create_mock_json_file(GOOD_DATA)
         json_file = JsonFile(filePath=_file)
         try:
-            ensure_json_file(json_file)
+            assetSvc.ensure_json_file(json_file)
         except Exception:
             assert False, "ensure_json_file raised an exception for a valid JSON file."
         finally:
@@ -75,10 +78,60 @@ class TestLoadAssets:
         wrong_file = create_mock_json_file(GOOD_DATA, suffix=".txt")
         not_json_file = JsonFile(filePath=wrong_file)
         with pytest.raises(Exception):
-            ensure_json_file(not_json_file)
+            assetSvc.ensure_json_file(not_json_file)
         os.remove(wrong_file)
 
 
 class TestAssetInsertions:
+    @with_table_lifecycle()
     def test_insert_valid_asset(self):
-        pass
+        asset_id = assetSvc.add_asset("ford pinto", "vehicle")
+
+    @with_table_lifecycle()
+    def test_insert_invalid_asset(self):
+        assert assetSvc.add_asset("salmon", "fish") is None
+    
+    @with_table_lifecycle()
+    def test_insert_missing_attribute(self):
+        with pytest.raises(TypeError):
+            assetSvc.add_asset("prop")
+
+
+class TestAssetVersionInsertions:
+    @with_table_lifecycle()
+    def test_valid_insert_asset_version(self):
+        new_asset_version =   {
+            "asset": {
+                "name": "hero",
+                "type": "character"
+            },
+            "department": "modeling",
+            "version": 2,
+            "status": "active"
+        }
+        av_id = assetSvc.add_asset_version(new_asset_version)
+        assert av_id == 1
+    
+    @with_table_lifecycle()
+    def test_missing_attribute_insert_asset_version(self):
+        new_asset_version = {
+            "department": "modeling",
+            "version": 1,
+            "status": "inactive"
+        }
+        
+        assert assetSvc.add_asset_version(new_asset_version) is None
+    
+    @with_table_lifecycle()
+    def test_valid_insert_asset_and_version(self):
+        asset = {"name": "steve", "type": "prop"}
+        new_asset_version =   {
+            "department": "modeling",
+            "version": 2,
+            "status": "active"
+        }
+        av_id = assetSvc.add_asset_and_version(asset, new_asset_version)
+        assert av_id == 1
+
+class TestServiceRetrievals:
+    pass

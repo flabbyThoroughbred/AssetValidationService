@@ -11,13 +11,15 @@ def create_logger(logger_name: str, log_level: int = logging.INFO) -> logging.Lo
     logger = logging.getLogger(logger_name)
     logger.setLevel(log_level)
 
-    console_handler = logging.StreamHandler()
+    # Only add handler if the logger doesn't already have any
+    if not logger.handlers:
+        console_handler = logging.StreamHandler()
 
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    console_handler.setFormatter(formatter)
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        console_handler.setFormatter(formatter)
 
-    logger.addHandler(console_handler)
+        logger.addHandler(console_handler)
 
     return logger
