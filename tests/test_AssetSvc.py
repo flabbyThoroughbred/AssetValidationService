@@ -89,7 +89,7 @@ class TestAssetInsertions:
 
     @with_table_lifecycle()
     def test_insert_invalid_asset(self):
-        assert assetSvc.add_asset("salmon", "fish") is None
+        assert assetSvc.add_asset("salmon", "fish") == None
     
     @with_table_lifecycle()
     def test_insert_missing_attribute(self):

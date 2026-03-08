@@ -1,27 +1,35 @@
 # AssetValidationService
-Framework for asset validation and registration.
+Framework for asset/asset version validation and registration.
+
+Approach:
+
+When designing this API I knew that I wanted to make use of data models to
+ensure data durability both in the initial ingest stage and when being inserted
+into the database. 
+I like using the pydantic module because its easy to use and extend types.  
+It became particular helpful when the asset version type needed to take two
+distinct shapes (AssetVersion and AssetVersionJson).
+
+For the data backend I chose sqlite because its lightweight and relatively
+simple to hit the ground running. It took a bit of getting used to the
+syntax since I'm more familiar with using PostgreSQL with psycopg2 but it's
+mostly the same approach. If I had more time I would have used something
+like SQLAlchemy or SQLModel for stronger typing enforcement but everything
+was pre-verified by the pydantic model prior to data insertion.
+
+Otherwise the actual user-facing API is pretty straightforward. I use
+a decorator to provide database control so it should be pretty easy to 
+modify the data manager or even provide a new data backend without changing
+the user-facing API.
 
 Components:
 
 Model - used to ensure type conformity.
-DataMgr - Interface with persistent storage. In this case we'll be using sqlite.
+DbManager - Interface with persistent storage. In this case we'll be using sqlite.
 The interface will be abstracted out to take data and store it without worrying about
 the implementation. 
-API - The user-facing data consumption/validation/storage interface.
-Tests - fundamental unit tests for the components.
-
-Model is the primary validator for incoming data. It contains the
-Asset and AssetVersion data structure model with field types. Any enumerated
-values are also defined here. I'm using pydantic here because its able to 
-act as an instant validator in many use cases.
-
-** Development Notes **
-- 03/04/2026
-Added type models and planning database management and API.
-Simple test suite layout.
-Need to get a logger in here.
-
-
+AssetSvc API - The user-facing data consumption/validation/storage interface.
+Tests - comprehensive unit tests for the components.
 
 
 How to use:
