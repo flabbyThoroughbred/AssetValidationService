@@ -2,8 +2,6 @@ import json
 import os
 import pytest
 import tempfile
-from pydantic import ValidationError
-from unittest.mock import patch, mock_open
 
 from AssetServiceController.Model import JsonFile
 import AssetServiceController.AssetSvc as assetSvc
