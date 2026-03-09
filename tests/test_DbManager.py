@@ -1,7 +1,6 @@
 from functools import wraps
 import json
 import pytest
-from sqlite3 import IntegrityError, ProgrammingError
 
 from AssetServiceController.api.Errors import DatabaseError
 from AssetServiceController.api.Model import Asset, AssetVersion, AssetVersionJson
