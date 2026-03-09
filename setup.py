@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="AssetValidationService"
+    name="AssetValidationService",
     description="Asset Validation and Ingest Service",
     version="0.0.1",
     packages=find_packages(),
