@@ -8,6 +8,4 @@ setup(
     install_requires=[
         "pydantic==2.12.5"
     ]
-
-
 )

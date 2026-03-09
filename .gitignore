@@ -1,6 +1,9 @@
 # sample data
 sample_data/
 
+# sandbox file
+sandbox.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
