@@ -5,8 +5,8 @@ import tempfile
 from pydantic import ValidationError
 from unittest.mock import patch, mock_open
 
-from AssetServiceController.api.Model import JsonFile
-import AssetServiceController.api.AssetSvc as assetSvc
+from AssetServiceController.Model import JsonFile
+import AssetServiceController.AssetSvc as assetSvc
 
 from utils import with_table_lifecycle
 

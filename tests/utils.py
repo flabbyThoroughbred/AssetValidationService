@@ -1,6 +1,6 @@
 from functools import wraps
 
-from AssetServiceController.api.DbManager import DBManager, with_db_manager
+from AssetServiceController.DbManager import DBManager, with_db_manager
 
 @with_db_manager()
 def build_tables(mgr: DBManager):

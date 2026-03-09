@@ -2,8 +2,8 @@ from functools import wraps
 import json
 import pytest
 
-from AssetServiceController.api.Errors import DatabaseError
-from AssetServiceController.api.Model import Asset, AssetVersion, AssetVersionJson
+from AssetServiceController.Errors import DatabaseError
+from AssetServiceController.Model import Asset, AssetVersion, AssetVersionJson
 
 from utils import drop_tables, with_table_lifecycle, DBManager
 
