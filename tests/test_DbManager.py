@@ -3,6 +3,7 @@ import json
 import pytest
 from sqlite3 import IntegrityError, ProgrammingError
 
+from AssetServiceController.api.Errors import DatabaseError
 from AssetServiceController.api.Model import Asset, AssetVersion, AssetVersionJson
 
 from utils import drop_tables, with_table_lifecycle, DBManager
@@ -48,7 +49,7 @@ class TestTableCreation:
         db = DBManager()
         # make sure asset table doesn't exist
         drop_tables()
-        with pytest.raises(ValueError):
+        with pytest.raises(DatabaseError):
             db.ensure_table("assets")
 
     def test_ensure_table(self):
@@ -86,7 +87,7 @@ class TestInsertions:
             status="active"
         )
         db = DBManager()
-        with pytest.raises((IntegrityError, ProgrammingError)):
+        with pytest.raises(DatabaseError):
             db.insert_assets([mock_asset])
     
     @with_table_lifecycle()
@@ -160,7 +161,7 @@ class TestInsertions:
         }
 
         db = DBManager()
-        with pytest.raises(ProgrammingError):
+        with pytest.raises(DatabaseError):
             db.insert_fails(data)
 
 

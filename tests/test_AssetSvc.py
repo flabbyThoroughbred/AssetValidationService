@@ -3,23 +3,38 @@ import os
 import pytest
 import tempfile
 from pydantic import ValidationError
+from unittest.mock import patch, mock_open
 
 from AssetServiceController.api.Model import JsonFile
 import AssetServiceController.api.AssetSvc as assetSvc
 
-from utils import build_tables, drop_tables, with_table_lifecycle, DBManager
+from utils import with_table_lifecycle
 
 def create_mock_json_file(payload: list[dict], suffix=".json") -> str:
     """
-    Create a temporary JSON file for testing.
+    Create a temporary in-memory JSON file for testing.
     
     :param payload: <list[dict]> list of dictionaries to be written to JSON file.
-
+    :param suffix: <str> the file type.
+    
     :returns: <str> file path of created JSON file.
     """
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False) as json_file:
         json.dump(payload, json_file)
+        return json_file.name
+    
+
+def create_mock_invalid_json_file(suffix=".json") -> str:
+    """
+    Create a temporary file with invalid JSON content for testing failure cases.
+    
+    :param suffix: <str> the file type.
+    
+    :returns: <str> file path of created invalid JSON file.
+    """
+    with tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False) as json_file:
+        json_file.write('{"invalid": json syntax}')  # Invalid JSON
         return json_file.name
     
 
@@ -69,8 +84,8 @@ class TestLoadAssets:
         finally:
             os.remove(_file)
 
-    def test_invalid_file(self):
-        _file = "c:/this/file/doees/not/exist.json"
+    def test_missing_file(self):
+        _file = "c:/this/file/does/not/exist.json"
         with pytest.raises(Exception):
             JsonFile(filePath=_file)
 
@@ -81,21 +96,38 @@ class TestLoadAssets:
             assetSvc.ensure_json_file(not_json_file)
         os.remove(wrong_file)
 
+    def test_load_assets_valid(self):
+        _file = create_mock_json_file(GOOD_DATA)
+        data = assetSvc.load_assets(_file)
+        assert data is not None
+        os.remove(_file)
+
+    def test_load_assets_invalid_json(self):
+        """Test that loading an invalid JSON file raises an exception."""
+        invalid_file_path = create_mock_invalid_json_file()
+        assert assetSvc.load_assets(invalid_file_path) is None
+        os.remove(invalid_file_path)
+    
+    def test_helper_load_assets_valid(self):
+        pass
+
+    def test_helper_load_assets_invalid(self):
+        pass
+
 
 class TestAssetInsertions:
     @with_table_lifecycle()
     def test_insert_valid_asset(self):
-        asset_id = assetSvc.add_asset("ford pinto", "vehicle")
+        assert assetSvc.add_asset("ford pinto", "vehicle") is not None
 
     @with_table_lifecycle()
     def test_insert_invalid_asset(self):
-        assert assetSvc.add_asset("salmon", "fish") == None
+        assert assetSvc.add_asset("salmon", "fish") is None
     
     @with_table_lifecycle()
     def test_insert_missing_attribute(self):
         with pytest.raises(TypeError):
             assetSvc.add_asset("prop")
-
 
 class TestAssetVersionInsertions:
     @with_table_lifecycle()
@@ -121,7 +153,7 @@ class TestAssetVersionInsertions:
         }
         
         assert assetSvc.add_asset_version(new_asset_version) is None
-    
+
     @with_table_lifecycle()
     def test_valid_insert_asset_and_version(self):
         asset = {"name": "steve", "type": "prop"}
@@ -133,5 +165,47 @@ class TestAssetVersionInsertions:
         av_id = assetSvc.add_asset_and_version(asset, new_asset_version)
         assert av_id == 1
 
-class TestServiceRetrievals:
-    pass
+#     @with_table_lifecycle()
+#     def test_batch_ingest_data(self):
+#         """
+#         TODO: need mock json file.
+#         """
+#         pass
+
+
+# class TestServiceRetrievals:
+#     @with_table_lifecycle()
+#     def test_list_assets(self):
+#         pass
+
+#     @with_table_lifecycle()
+#     def test_list_assets_no_records(self):
+#         pass
+
+#     @with_table_lifecycle()
+#     def test_get_asset(self):
+#         pass
+
+#     @with_table_lifecycle()
+#     def test_get_asset_no_record(self):
+#         pass
+
+#     @with_table_lifecycle()
+#     def test_get_asset_version(self):
+#         # 1) make mock asset/asset versions (at least 3 or 4)
+#         # 2) call assetSvc.get_asset_version with existing attributes to search
+#         pass
+
+#     @with_table_lifecycle()
+#     def test_get_asset_version_no_record(self):
+#         # 1) make mock asset/asset versions (at least 3 or 4)
+#         # 2) call assetSvc.get_asset_version with existing attributes to search
+#         pass
+
+#     @with_table_lifecycle()
+#     def test_list_asset_versions(self):
+#         pass
+
+#     @with_table_lifecycle()
+#     def test_list_asset_versions_no_records(self):
+#         pass

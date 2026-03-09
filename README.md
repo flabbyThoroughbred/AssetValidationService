@@ -25,15 +25,15 @@ the user-facing API.
 Components:
 
 Model - used to ensure type conformity.
-DbManager - Interface with persistent storage. In this case we'll be using sqlite.
-The interface will be abstracted out to take data and store it without worrying about
-the implementation. 
+DbManager - database interface. In this case we'll be using sqlite.
 AssetSvc API - The user-facing data consumption/validation/storage interface.
-Tests - comprehensive unit tests for the components.
+Tests - comprehensive unit tests for the components. In cases where
+a mock json file is needed, a temporary json file is created
 
 
 How to use:
     * Will try to make this pip-able from the github repo.
+
 
     import AssetValidationService as AVS
 

@@ -4,21 +4,27 @@ from pydantic import ValidationError
 from .Logger import create_logger
 logger = create_logger("AssetSvc")
 
-from . import Model as m
 from .DbManager import DBManager, with_db_manager
+from .Errors import DatabaseError
+from . import Model as m
 
+# =============================== UTILITIES ===================================
 def validationHandler(err: ValidationError, dbMgr: DBManager, **fail_data) -> dict:
-    logger.error(
-        "OH no! You've encountered an error. "
-        f"It has been logged for further investigation. {err}"
-    )
     if type(err) == ValidationError:
         err_data = err.errors()[0]
+        loc = ".".join(err_data["loc"])
+        _type = err_data["type"]
+        msg = err_data["msg"]
+
+        logger.error(
+            "You've encountered a data validation error! "
+            f"{loc} - {msg}."
+        )
         dbMgr.insert_fails({
             "fail_data": json.dumps(fail_data),
-            "loc": ".".join(err_data["loc"]),
-            "type": err_data["type"],
-            "msg": err_data["msg"]
+            "loc": loc,
+            "type": _type,
+            "msg": msg
         })
     else:
         dbMgr.insert_fails({
@@ -28,11 +34,6 @@ def validationHandler(err: ValidationError, dbMgr: DBManager, **fail_data) -> di
             "msg": str(err)
         })
 
-
-"""
-Directly accessible from other APIs. Higher-level. Just pass in your data
-and away you go. In theory at least.
-"""
 
 def ensure_json_file(dataFile: m.JsonFile) -> None:
     """
@@ -45,9 +46,27 @@ def ensure_json_file(dataFile: m.JsonFile) -> None:
     """
 
     if not dataFile.filePath.parts[-1].lower().endswith(".json"):        
-        raise Exception(f"File {dataFile.filePath} is not a .json file.")
+        raise OSError(f"File {dataFile.filePath} is not a .json file.")
 
 
+def _load_assets(dataFile: m.JsonFile) -> dict:
+    """
+    Internal function to load json file as dict.
+
+    :param dataFile: <JsonFile> must be a .json file
+
+    :returns: <dict> dictionary object loaded from json
+    """
+
+    with open(dataFile.filePath, "r") as f:
+        loaded = json.load(f)
+        if loaded is None:
+            return {}
+        else:
+            return loaded
+
+# =============================================================================
+# =============================================================================
 def load_assets(dataFile: str) -> dict:
     """
     Take an input file <json> and load as 
@@ -59,50 +78,37 @@ def load_assets(dataFile: str) -> dict:
     """
     try:
         json_file = m.JsonFile(filePath=dataFile)
+        ensure_json_file(json_file)
         return _load_assets(json_file)
-    except ValidationError as e:
-        return [{"err": f"{dataFile} does not exist."}]
+    except ValidationError:
+        # pydantic validation error
+        logger.error(f"Could not load {dataFile} -- Does not exist.")
+    except OSError as e:
+        # not a json filetype
+        logger.error(e)
+    except json.JSONDecodeError:
+        # json file error
+        logger.error(f"Invalid file [{dataFile}] -- Could not load.")
+    return None
 
-
-
-def _load_assets(dataFile: m.JsonFile) -> dict:
-    """
-    Internal function to load json file as dict.
-
-    :param dataFile: <JsonFile> must be a .json file
-
-    :returns: <dict> dictionary object loaded from json
-    """
-    ensure_json_file(dataFile)
-    try:
-        with open(dataFile.filePath, "r") as f:
-            return json.load(f)
-    except (Exception) as e:
-        return [{"err": f"An error was encountered when opening this file: {dataFile.filePath}"}]
-        
 
 @with_db_manager()
 def batch_ingest_data(dataFile: str, mgr: DBManager) -> None:
     """
-    Take a json file array of assets/assetVersions and add to database.
-    Type models validate by checking if each individual item is either
-    an Asset or AssetVersion. If AssetVersion, validates its asset field
-    as an Asset type...etc.
-    
-    steps:
-    - load json as dict
-    - iterate through items
-        - validate through type models
-        - if asset, add to asset insertion set
-        - if assetVersion, add to assetVersion insertion set
-        - if either is invalid, add neither to set
-        - if not asset (already has an asset id) add to different assetVersion set.
-    - at this point there should be two equal arrays of pre-insertion asset and asset version data.
-    - batch add assets, the asset ids should be aligned with the assetVersion count.
+    Given a valid json file, ingest assets and asset version:
+        - validate the data against a data model.
+        - insert into database.
+        - log errors while continuing to process.
+        
+    :param mgr: <DBManager> implicit inclusion by the decorator. Provide
+    database operations.    
+    :param dataFile: <str> a json data file of assets and asset versions.
 
+    :returns: <list[dict]> ids of all paired assets and asset version.
     """
     loaded_data = load_assets(dataFile)
-
+    err_encountered = False
+    ids = []
     for item in loaded_data:
         if err:= item.get("err"):
             logger.error(err)
@@ -110,15 +116,23 @@ def batch_ingest_data(dataFile: str, mgr: DBManager) -> None:
         try:
             asset = m.Asset(**item["asset"])
             asset_version = m.AssetVersionJson(**item)
-            ids = mgr.insert_asset_and_version(
+            _ids = mgr.insert_asset_and_version(
                 asset,
                 asset_version,
                 defer_commit=True
             )
-            mgr.logger.info(ids)
+            ids.append[_ids]
         except Exception as e:
+            err_encountered = True
             validationHandler(e, dbMgr=mgr, item=item)
+
     mgr.session.commit()
+    if err_encountered:
+        logger.error(
+            "There were problems with this ingest. Please see prior logs."
+        )
+    
+    return ids
 
 
 @with_db_manager()
@@ -137,32 +151,11 @@ def add_asset(asset_name: str, asset_type: str, mgr: DBManager) -> int:
     try:
         ids = mgr.insert_assets([m.Asset(name=asset_name, type=asset_type)])
         return ids[0]
-    except Exception as e:
+    except ValidationError as e:
         validationHandler(e, dbMgr=mgr, asset_name=asset_name, asset_type=asset_type)
-
-
-@with_db_manager()
-def _add_asset_version(asset_version: dict, mgr: DBManager) -> int:
-    """
-    <internal>
-    Add single asset version to database. This assumes the asset
-    already exists! the asset field must be the id of an existing
-    asseet record.
-
-    :param assetVersionData: <dict> asset version to be added. Assumes
-    asset is already validated (is of type asset).
-
-    :param mgr: <DBManager> implicit inclusion by the decorator. Provide
-    database operations.
-
-    :returns: <int> id of inserted asset version record. If asset version
-    already exists, return id of existing record.
-    """
-    try:
-        ids = mgr.insert_asset_versions([m.AssetVersion(**asset_version)])
-        return ids[0]
-    except Exception as e:
-        validationHandler(e, dbMgr=mgr, asset_verion=asset_version)
+    except DatabaseError as e:
+        logger.error(e)
+    return None
 
 
 @with_db_manager()
@@ -187,8 +180,11 @@ def add_asset_version(asset_version: dict, mgr: DBManager) -> int:
             asset_version
         )
         return ids["asset_version_id"]
-    except Exception as e:
+    except ValidationError as e:
         validationHandler(e, dbMgr=mgr, asset_version=asset_version)
+    except DatabaseError as e:
+        logger.error(e)
+    return None
 
 
 @with_db_manager()
@@ -216,7 +212,9 @@ def add_asset_and_version(asset: dict, asset_version: dict, mgr: DBManager) -> i
         return ids["asset_version_id"]
     except Exception as e:
         validationHandler(e, dbMgr=mgr, asset=asset, asset_version=asset_version)
-
+    except DatabaseError as e:
+        logger.error(e)
+    return None
 
 @with_db_manager()
 def list_assets(mgr: DBManager) -> tuple[list[dict]|list]:
@@ -272,7 +270,7 @@ def get_asset_version(asset_name: int, asset_type: str,
     
     try:
         # validate type first
-        _type = m.AssetType(asset_type)
+        m.AssetType(asset_type)
     except ValidationError as e:
         logger.error(e)
 

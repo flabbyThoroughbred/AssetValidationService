@@ -1,10 +1,12 @@
 import sqlite3
 from functools import wraps
 
-from .Model import Asset, AssetVersion, AssetType, Department, Status
 from .Logger import create_logger
-
 _logger = create_logger("DBManager")
+
+from .Errors import DatabaseError
+from .Model import Asset, AssetVersion, AssetType, Department, Status
+
 
 """
 Was considering using SQLAlchemy or SQLModel but going to stick with
@@ -93,7 +95,7 @@ class DBManager:
             (table_name,)
         )
         if not table_check.fetchall():
-            raise ValueError(f"Table '{table_name}' does not exist.")
+            raise DatabaseError(f"Table '{table_name}' does not exist.")
         
     def drop_table(self, table_name: str) -> None:
         cmd = f"DROP TABLE IF EXISTS {table_name};" # Not safe but using for demonstration/test purposes.
@@ -185,9 +187,8 @@ class DBManager:
                 self.session.commit()
             return ids
         except (sqlite3.IntegrityError, sqlite3.ProgrammingError) as e:
-            self.logger.error(f"Error inserting assets: {e}")
             self.session.rollback()
-            raise e
+            raise DatabaseError(f"Error inserting assets: {e}")
 
     def insert_asset_versions(self, asset_versions: list[AssetVersion],
     defer_commit: bool=False) -> list[int]:
@@ -214,9 +215,8 @@ class DBManager:
                 self.session.commit()
             return ids
         except (sqlite3.IntegrityError, sqlite3.ProgrammingError) as e:
-            self.logger.error(f"Error inserting asset versions: {e}")
             self.session.rollback()
-            raise e
+            raise DatabaseError(f"Error inserting asset versions: {e}")
 
     def insert_asset_and_version(self, asset: Asset,
     asset_version: AssetVersion, defer_commit: bool=False) -> dict:
@@ -241,9 +241,8 @@ class DBManager:
                 self.session.commit()
             return {"asset_id": asset_id, "asset_version_id": av_id}
         except (sqlite3.IntegrityError, sqlite3.ProgrammingError) as e:
-            self.logger.error(f"Error inserting asset and version: {e}")
             self.session.rollback()
-            raise e
+            raise DatabaseError(f"Error inserting asset and version: {e}")
 
     def insert_fails(self, failed_data: dict, defer_commit: bool=False) -> int:
         """
@@ -261,9 +260,8 @@ class DBManager:
                 self.session.commit()
             return fail_id
         except (sqlite3.IntegrityError, sqlite3.ProgrammingError) as e:
-            self.logger.error(f"Error inserting asset and version: {e}")
             self.session.rollback()
-            raise e
+            raise DatabaseError(f"Error inserting asset and version: {e}")
 
     def retrieve_single_asset(self, asset_name: str,
     asset_type: str) -> tuple[dict, None]:
