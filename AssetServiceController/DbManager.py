@@ -26,12 +26,16 @@ INSERT_ASSET_CMD = """
 INSERT_ASSET_VERSION_CMD = """
     INSERT INTO asset_versions (asset, department, version, status)
     VALUES (:asset, :department, :version, :status)
+    ON CONFLICT (asset, department, version) DO UPDATE SET
+        status = excluded.status
     RETURNING id;
 """
 
 INSERT_FAILED_CMD = """
     INSERT INTO fails (fail_data, loc, type, msg)
     VALUES (:fail_data, :loc, :type, :msg)
+    ON CONFLICT(fail_data) DO UPDATE SET
+        msg = excluded.msg
     RETURNING id;
 """
 
@@ -151,7 +155,8 @@ class DBManager:
                 fail_data JSON NOT NULL,
                 loc TEXT,
                 type TEXT,
-                msg TEXT NOT NULL
+                msg TEXT NOT NULL,
+                CONSTRAINT UQ_FAIL_DATA UNIQUE(fail_data)
             );
         """
         self.session.execute(cmds)
@@ -215,6 +220,8 @@ class DBManager:
                 self.session.commit()
             return ids
         except (sqlite3.IntegrityError, sqlite3.ProgrammingError) as e:
+            # conflicts should now be handled by the ON CONFLICT clause, but
+            # if we still hit an integrity error something else is wrong.
             self.session.rollback()
             raise DatabaseError(f"Error inserting asset versions: {e}")
 
@@ -230,11 +237,13 @@ class DBManager:
         """
 
         try:
+            # asset insert/upsert first
             a_crs = self.session.execute(INSERT_ASSET_CMD, asset.model_dump())
             asset_id = a_crs.fetchone()["id"]
 
             av_data = asset_version.model_dump()
             av_data["asset"] = asset_id
+            # version insert/upsert now handles conflicts via SQL
             av_crs = self.session.execute(INSERT_ASSET_VERSION_CMD, av_data)
             av_id = av_crs.fetchone()["id"]
             if not defer_commit:
@@ -285,7 +294,7 @@ class DBManager:
         return cursor.fetchone()
     
     def retrieve_single_asset_version(self,  asset_name: str,
-    asset_type: str, version_num: int) -> tuple[dict | None]:
+    asset_type: str, department: str, version_num: int) -> tuple[dict | None]:
         """
         Retrieve a single asset version given asset name, type and version.
 
@@ -300,14 +309,15 @@ class DBManager:
             SELECT av.* FROM asset_versions av
             JOIN assets a ON av.asset = a.id
             WHERE a.name = :asset_name AND a.type = :asset_type
-            AND av.version = :version_num;
+            AND av.version = :version_num AND av.department = :department;
         """
         cursor = self.session.execute(
             cmd,
             {
                 "asset_name": asset_name,
                 "asset_type": asset_type,
-                "version_num": version_num
+                "version_num": version_num,
+                "department": department
             }
         )
         return cursor.fetchone()

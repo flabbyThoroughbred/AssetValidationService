@@ -34,46 +34,16 @@ def create_mock_invalid_json_file(suffix=".json") -> str:
     with tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False) as json_file:
         json_file.write('{"invalid": json syntax}')  # Invalid JSON
         return json_file.name
-    
 
-GOOD_DATA = [
-  {
-    "asset": {
-      "name": "hero",
-      "type": "character"
-    },
-    "department": "modeling",
-    "version": 1,
-    "status": "active"
-  },
-  {
-    "asset": {
-      "name": "hero",
-      "type": "character"
-    },
-    "department": "modeling",
-    "version": 2,
-    "status": "active"
-  },
-  {
-    "asset": {
-      "name": "hero",
-      "type": "fx"
-    },
-    "department": "texturing",
-    "version": 1,
-    "status": "active"
-  }
-]
 
 class TestLoadAssets:
-    def test_valid_json_file(self):
-        json_file = create_mock_json_file(GOOD_DATA)
+    def test_valid_json_file(self, good_data):
+        json_file = create_mock_json_file(good_data)
         assert JsonFile(filePath=json_file)
         os.remove(json_file)
     
-    def test_ensure_json(self):
-        _file = create_mock_json_file(GOOD_DATA)
+    def test_ensure_json(self, good_data):
+        _file = create_mock_json_file(good_data)
         json_file = JsonFile(filePath=_file)
         try:
             assetSvc.ensure_json_file(json_file)
@@ -87,15 +57,15 @@ class TestLoadAssets:
         with pytest.raises(Exception):
             JsonFile(filePath=_file)
 
-    def test_not_json_file(self):
-        wrong_file = create_mock_json_file(GOOD_DATA, suffix=".txt")
+    def test_not_json_file(self, good_data):
+        wrong_file = create_mock_json_file(good_data, suffix=".txt")
         not_json_file = JsonFile(filePath=wrong_file)
         with pytest.raises(Exception):
             assetSvc.ensure_json_file(not_json_file)
         os.remove(wrong_file)
 
-    def test_load_assets_valid(self):
-        _file = create_mock_json_file(GOOD_DATA)
+    def test_load_assets_valid(self, good_data):
+        _file = create_mock_json_file(good_data)
         data = assetSvc.load_assets(_file)
         assert data is not None
         os.remove(_file)

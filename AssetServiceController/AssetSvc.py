@@ -9,6 +9,24 @@ from .Errors import DatabaseError
 from . import Model as m
 
 # =============================== UTILITIES ===================================
+@with_db_manager()
+def _build_tables(mgr: DBManager):
+    """
+    Create simple demonstration databases.
+    """
+    mgr.create_tables()
+
+
+@with_db_manager()
+def _drop_tables(mgr: DBManager):
+    """
+    Drops demonstration databases.
+    """
+    mgr.drop_table("fails")
+    mgr.drop_table("asset_versions")
+    mgr.drop_table("assets")
+
+
 def validationHandler(err: ValidationError, dbMgr: DBManager, **fail_data) -> dict:
     if type(err) == ValidationError:
         err_data = err.errors()[0]
@@ -107,6 +125,8 @@ def batch_ingest_data(dataFile: str, mgr: DBManager) -> None:
     :returns: <list[dict]> ids of all paired assets and asset version.
     """
     loaded_data = load_assets(dataFile)
+    if loaded_data is None:
+        return
     err_encountered = False
     ids = []
     for item in loaded_data:
@@ -121,7 +141,7 @@ def batch_ingest_data(dataFile: str, mgr: DBManager) -> None:
                 asset_version,
                 defer_commit=True
             )
-            ids.append[_ids]
+            ids.append(_ids)
         except Exception as e:
             err_encountered = True
             validationHandler(e, dbMgr=mgr, item=item)

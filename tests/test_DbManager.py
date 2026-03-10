@@ -71,6 +71,9 @@ class TestInsertions:
         mock_asset = Asset(name="guy", type="character")
         db = DBManager()
         asset_ids = db.insert_assets([mock_asset])
+        # inserting same asset again should not raise, and should return same ID
+        asset_ids2 = db.insert_assets([mock_asset])
+        assert asset_ids == asset_ids2
         assert len(asset_ids) == 1
         assert asset_ids[0] == 1
 
@@ -105,15 +108,17 @@ class TestInsertions:
             status="active"
         )
         ver_ids = db.insert_asset_versions([mock_asset_version])
+        # repeat insertion should return same id instead of throwing
+        ver_ids2 = db.insert_asset_versions([mock_asset_version])
+        assert ver_ids == ver_ids2
         assert len(ver_ids) == 1
         assert ver_ids[0] == 1
 
     @with_table_lifecycle()
-    def test_insert_asset_and_version(self):
-        _asset = {"name": "guy", "type": "character"}
-        mock_asset = Asset(**_asset)
+    def test_insert_asset_and_version(self, generic_asset):
+        mock_asset = Asset(**generic_asset)
         mock_asset_version = AssetVersionJson(
-            asset=_asset,
+            asset=generic_asset,
             department="modeling",
             version=1,
             status="active"
@@ -121,6 +126,9 @@ class TestInsertions:
 
         db = DBManager()
         ids = db.insert_asset_and_version(mock_asset, mock_asset_version)
+        # inserting same asset/version pair again should simply return existing ids
+        ids2 = db.insert_asset_and_version(mock_asset, mock_asset_version)
+        assert ids == ids2
         assert ids["asset_id"] == 1 
         assert ids["asset_version_id"] == 1
 
@@ -141,6 +149,24 @@ class TestInsertions:
         db = DBManager()
         id = db.insert_fails(data)
         assert id == 1
+
+    @with_table_lifecycle()
+    def test_insert_fails_duplicate(self):
+        """re-inserting same failure should return the original id"""
+        data = {
+            "fail_data": json.dumps({
+                "version": 2,
+                "status": "inactive",
+                "department": "modeling"
+            }),
+            "loc": "asset",
+            "type": "missing_field",
+            "msg": "Missing required field: asset"
+        }
+        db = DBManager()
+        id1 = db.insert_fails(data)
+        id2 = db.insert_fails(data)
+        assert id1 == id2
     
     @with_table_lifecycle()
     def test_insert_fails_bad_payload(self):
@@ -254,40 +280,12 @@ class TestRetrievals:
         assert asset_versions == []
 
     @with_table_lifecycle()
-    def test_retrieve_single_asset_version(self):
-        mock_data =  [{
-            "asset": {
-            "name": "hero",
-            "type": "prop"
-            },
-            "department": "modeling",
-            "version": 1,
-            "status": "active"
-        },
-        {
-            "asset": {
-            "name": "hero",
-            "type": "prop"
-            },
-            "department": "modeling",
-            "version": 2,
-            "status": "active"
-        },
-        {
-            "asset": {
-            "name": "hero",
-            "type": "prop"
-            },
-            "department": "modeling",
-            "version": 3,
-            "status": "active"
-        }]
-
+    def test_retrieve_single_asset_version(self, good_data):
         db = DBManager()
-        mock_asset = Asset(**mock_data[0]["asset"])
+        mock_asset = Asset(**good_data[0]["asset"])
         asset_ids = db.insert_assets([mock_asset])
         asset_versions = []
-        for i in mock_data:
+        for i in good_data:
             i["asset"] = asset_ids[0]
             asset_versions.append(AssetVersion(**i))
         db.insert_asset_versions(asset_versions)
@@ -295,7 +293,8 @@ class TestRetrievals:
         retrieved_item = db.retrieve_single_asset_version(
             asset_name="hero",
             asset_type="prop",
-            version_num=3
+            version_num=3,
+            department="modeling"
         )
 
         assert retrieved_item["version"] == 3
@@ -307,7 +306,8 @@ class TestRetrievals:
         retrieved_item = db.retrieve_single_asset_version(
             asset_name="hero",
             asset_type="prop",
-            version_num=3
+            version_num=3,
+            department="modeling"
         )
 
         assert retrieved_item is None
