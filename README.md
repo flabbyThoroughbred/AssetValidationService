@@ -43,6 +43,16 @@ Tests - comprehensive unit tests for the components. In cases where
 a mock json file is needed, a temporary json file is created
 
 
+How to test:
+    install dependencies:
+        -python -m pip install -r requirements.txt
+    
+    run tests:
+        python -m pytest -q
+
+Note - most recent tests will be in the github action as well.
+
+
 How to use:
     Package can be installed:
         python -m pip install git+https://github.com/flabbyThoroughbred/AssetValidationService.git
