@@ -30,6 +30,14 @@ class Department(str, Enum):
 class Status(str, Enum):
     active = "active"
     inactive = "inactive"
+
+
+# Helper enum data type validator
+class _Validator(BaseModel):
+    type: Optional[AssetType] = "character"
+    department: Optional[Department] = "modeling"
+    status: Optional[Status] = "active"
+    data_type: Optional[DataType] = "asset"
 # =============================================================================
 
 

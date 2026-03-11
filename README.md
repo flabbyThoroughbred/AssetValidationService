@@ -10,17 +10,29 @@ I like using the pydantic module because its easy to use and extend types.
 It became particular helpful when the asset version type needed to take two
 distinct shapes (AssetVersion and AssetVersionJson).
 
-For the data backend I chose sqlite because its lightweight and relatively
-simple to hit the ground running. It took a bit of getting used to the
+For the data backend I chose sqlite because its lightweight and deploys
+easily for demonstration purposes. It took a bit of getting used to the
 syntax since I'm more familiar with using PostgreSQL with psycopg2 but it's
-mostly the same approach. If I had more time I would have used something
+mostly the same approach. For future improvements I would have used something
 like SQLAlchemy or SQLModel for stronger typing enforcement but everything
-was pre-verified by the pydantic model prior to data insertion.
+was pre-verified by the pydantic model prior to data insertion. I'd 
+likely include upsert/delete functionality in future additions.
 
 Otherwise the actual user-facing API is pretty straightforward. I use
 a decorator to provide database control so it should be pretty easy to 
 modify the data manager or even provide a new data backend without changing
 the user-facing API.
+
+I'm using github actions to run my tests since this is a more familiar
+workflow for me. If there's time I'd like to get a FastAPI setup with
+some of the more general requests like single insertions and retrievals.
+I'd probably avoid using the 'load' feature for now in a request scenario
+since loading files on a server assumes that path would exist (maybe not).
+Not to mention the unknown work time required for larger json files. 
+I'd consider doing something where the request would send a task request via
+a message queue (redis/rabbitmq) and handle-long running tasks in a de-coupled
+setup.
+
 
 Components:
 
@@ -32,19 +44,71 @@ a mock json file is needed, a temporary json file is created
 
 
 How to use:
-    * Will try to make this pip-able from the github repo.
+    Package can be installed:
+        python -m pip install git+https://github.com/flabbyThoroughbred/AssetValidationService.git
 
 
-    import AssetValidationService as AVS
+    import the package:
+    `from AssetServiceController import AssetSvc as aSvc`
 
-    Ingesting assets/asset versions from a json file:
-    *** will validate file and add to asset/asset version db.
-    errors will be logged and failed data will be stored in a special
-    failed item database ***
-        - AVS.ingest_assets(json_file) 
+    # note - for demonstration purposes I have included a table builder 
+    function to run one at the start:
     
-    Loading a json file of assets/asset versions as a dictionary:
-        - AVS.load_assets(json_file)
+    `aSvc._build_tables()`
+
+    optionally tables can be dropped with this command:
+
+    `aSvc._drop_tables()`
+
+    * All attributes are assumed string type unless otherwise noted.
+    The following attributes are type validated and will match the following:
+        - asset_type ["character", "dressing", "environment", "fx", "prop", "set", "vehicle"]
+        - department ["modeling", "texturing", "rigging", "animation", "cfx", "fx"]
+        - status ["active", "inactive"]
+
+    1) Loading Assets - This only loads a json file and returns a dict object.
+        `aSvc.load_assets(dataFile: <path to your file>)`
+
+    2) Ingest Assets - Loads a json file and ingests assets/asset_versions.
+        `aSvc.batch_ingest_data(dataFile: <path to your file>)`
     
+    3) Add an Asset - Insert single asset into database. Returns the record id.
+        `aSvc.add_asset(asset_name, asset_type)`
+    
+    4) Add an Asset Version - Insert single asset and asset version into
+    database. Will re-use exist assets.
+        `aSvc.add_asset_version(
+            asset_name="guy",
+            asset_type="character",
+            department="modeling",
+            version=1,
+            status="active"
+        )`
+    
+    5) List Assets - List all existing assets.
+        `aSvc.list_assets()`
+
+    6) Get Assets - Get assets with either an asset name, asset type.
+    Or both. Or neither. Neither will simply do the same as list_assets.
+        `aSvc.get_assets(asset_name<optional>, asset_type<optional>)`
+
+    7) Get Asset Version - retrieve a single asset version with required
+    criteria.
+        `aSvc.get_asset_version(
+            asset_name,
+            asset_type,
+            department,
+            version_num[int]
+        )
+
+    8) List Asset Versions - retrieve all asset versions with given criteria.
+        `aSvc.list_asset_versions(
+            asset_name,
+            asset_type,
+            department<optional>,
+            version_num[int]<optional>,
+            status<optonal>
+        )
+
 
 

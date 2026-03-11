@@ -8,7 +8,7 @@ from .DbManager import DBManager, with_db_manager
 from .Errors import DatabaseError
 from . import Model as m
 
-# =============================== UTILITIES ===================================
+# ========================== Demonstration Utilities ==========================
 @with_db_manager()
 def _build_tables(mgr: DBManager):
     """
@@ -25,9 +25,21 @@ def _drop_tables(mgr: DBManager):
     mgr.drop_table("fails")
     mgr.drop_table("asset_versions")
     mgr.drop_table("assets")
+# =============================================================================
 
 
-def validationHandler(err: ValidationError, dbMgr: DBManager, **fail_data) -> dict:
+def _validationHandler(err: ValidationError, dbMgr: DBManager, **fail_data) -> dict:
+    """
+    Capture pydantic validation errors, store the failed data in the fails 
+    table and log the error.
+
+    :param err: <ValidationError> the pydantic validation error
+    :param dbMrg: <DBManager> database manager
+    :kwargs: failed data dictionary.
+
+    :returns: None
+
+    """
     if type(err) == ValidationError:
         err_data = err.errors()[0]
         loc = ".".join(err_data["loc"])
@@ -142,9 +154,9 @@ def batch_ingest_data(dataFile: str, mgr: DBManager) -> None:
                 defer_commit=True
             )
             ids.append(_ids)
-        except Exception as e:
+        except ValidationError as e:
             err_encountered = True
-            validationHandler(e, dbMgr=mgr, item=item)
+            _validationHandler(e, dbMgr=mgr, item=item)
 
     mgr.session.commit()
     if err_encountered:
@@ -172,14 +184,26 @@ def add_asset(asset_name: str, asset_type: str, mgr: DBManager) -> int:
         ids = mgr.insert_assets([m.Asset(name=asset_name, type=asset_type)])
         return ids[0]
     except ValidationError as e:
-        validationHandler(e, dbMgr=mgr, asset_name=asset_name, asset_type=asset_type)
+        _validationHandler(e, dbMgr=mgr, asset_name=asset_name, asset_type=asset_type)
     except DatabaseError as e:
         logger.error(e)
     return None
 
 
+def add_asset_version(asset_name: str, asset_type: str, department: str,
+version_num: int, status: str) -> int:
+    return _add_asset_version(
+        {
+            "asset": {"name": asset_name, "type": asset_type},
+            "department": department,
+            "version": version_num,
+            "status": status
+        }
+    )
+
+
 @with_db_manager()
-def add_asset_version(asset_version: dict, mgr: DBManager) -> int:
+def _add_asset_version(asset_version: dict, mgr: DBManager) -> int:
     """
     <User-facing>
     Accepts single asset version payload provided:
@@ -201,7 +225,7 @@ def add_asset_version(asset_version: dict, mgr: DBManager) -> int:
         )
         return ids["asset_version_id"]
     except ValidationError as e:
-        validationHandler(e, dbMgr=mgr, asset_version=asset_version)
+        _validationHandler(e, dbMgr=mgr, asset_version=asset_version)
     except DatabaseError as e:
         logger.error(e)
     return None
@@ -230,8 +254,8 @@ def add_asset_and_version(asset: dict, asset_version: dict, mgr: DBManager) -> i
         asset_version = m.AssetVersionLite(**asset_version)
         ids = mgr.insert_asset_and_version(asset, asset_version)
         return ids["asset_version_id"]
-    except Exception as e:
-        validationHandler(e, dbMgr=mgr, asset=asset, asset_version=asset_version)
+    except ValidationError as e:
+        _validationHandler(e, dbMgr=mgr, asset=asset, asset_version=asset_version)
     except DatabaseError as e:
         logger.error(e)
     return None
@@ -250,13 +274,13 @@ def list_assets(mgr: DBManager) -> tuple[list[dict]|list]:
 
 
 @with_db_manager()
-def get_asset(asset_name: str, asset_type: str,
-    mgr: DBManager) -> tuple[dict|None]:
+def get_assets(asset_name: str=None,
+asset_type: str=None, mgr: DBManager=None) -> tuple[list[dict]|list]:
     """
     Get asset record by name and type.
 
-    :param asset_name: <str> name of asset to retrieve.
-    :param asset_type: <AssetType> type of asset to retrieve. Must conform
+    :param asset_name: <str> (Optional) name of asset to retrieve.
+    :param asset_type: <AssetType> (Optional) type of asset to retrieve. Must conform
     to type AssetType.
     :param mgr: <DBManager> implicit inclusion by the decorator. Provide
     database operations.
@@ -265,22 +289,26 @@ def get_asset(asset_name: str, asset_type: str,
     """
     try:
         # validate type first
-        _type = m.AssetType(asset_type)
+        if asset_type:
+            m._Validator(type=asset_type)
     except ValidationError as e:
         logger.error(e)
 
-    return mgr.retrieve_single_asset(asset_name, asset_type)
+    return mgr.retrieve_assets(asset_name, asset_type)
 
 
 @with_db_manager()
-def get_asset_version(asset_name: int, asset_type: str,
+def get_asset_version(asset_name: str, asset_type: str, department: str,
     version_num: int, mgr: DBManager) -> tuple[dict|None]:
     """
-    Return a single asset version record by asset id, asset type and version.
+    Return a single asset version record by asset id, asset type,
+    department and version.
 
     :param asset_name: <str> name of asset to retrieve.
-    :param asset_type: <AssetType> type of asset to retrieve version for.
+    :param asset_type: <str> type of asset to retrieve version for.
     Must conform to type AssetType.
+    :param department: <str> department of asset version. Must conform
+    to type Department.
     :param version: <str> version of asset version to retrieve.
     :param mgr: <DBManager> implicit inclusion by the decorator. Provide
     database operations.
@@ -289,27 +317,31 @@ def get_asset_version(asset_name: int, asset_type: str,
     """
     
     try:
-        # validate type first
-        m.AssetType(asset_type)
+        # validate type and department first
+        m._Validator(type=asset_type, department=department)
     except ValidationError as e:
         logger.error(e)
 
     return mgr.retrieve_single_asset_version(
         asset_name,
         asset_type,
+        department,
         version_num
     )
 
 
 @with_db_manager()
-def list_asset_versions(asset_name: str, asset_type: m.AssetType,
-mgr: DBManager) -> tuple[list[dict]|list]:
+def list_asset_versions(asset_name: str, asset_type: str, department: str=None,
+version_num: int=None, status: str=None, mgr: DBManager=None) -> tuple[list[dict]|list]:
     """
     Return array of asset version records matching the given asset name and type.
 
     :param asset_name: <str> name of asset to retrieve versions for.
     :param asset_type: <AssetType> type of asset to retrieve versions for.
     Must conform to type AssetType.
+    :param department: <str> optional department parameter. Must conform to Department type.
+    :param verison: <int> optional version parameter.
+    :param status: <str> optional status parameter. Must conform to Status type.
     :param mgr: <DBManager> implicit inclusion by the decorator. Provide
     database operations.
 
@@ -317,8 +349,18 @@ mgr: DBManager) -> tuple[list[dict]|list]:
     """
     try:
         # validate type first
-        _type = m.AssetType(asset_type)
+        m._Validator(type=asset_type)
+        if department:
+            m._Validator(department=department)
+        if status:
+            m._Validator(status=status)
     except ValidationError as e:
         logger.error(e)
 
-    return mgr.list_asset_versions(asset_name, asset_type)
+    return mgr.list_asset_versions(
+        asset_name=asset_name,
+        asset_type=asset_type,
+        department=department,
+        version=version_num,
+        status=status
+    )

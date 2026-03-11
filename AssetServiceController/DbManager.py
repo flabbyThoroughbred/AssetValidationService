@@ -220,8 +220,6 @@ class DBManager:
                 self.session.commit()
             return ids
         except (sqlite3.IntegrityError, sqlite3.ProgrammingError) as e:
-            # conflicts should now be handled by the ON CONFLICT clause, but
-            # if we still hit an integrity error something else is wrong.
             self.session.rollback()
             raise DatabaseError(f"Error inserting asset versions: {e}")
 
@@ -293,6 +291,32 @@ class DBManager:
         )
         return cursor.fetchone()
     
+    def retrieve_assets(self, asset_name: str=None, asset_type: str=None) -> list:
+        """
+        Retrieve assets given the optional parameters.
+        If no params provided, retrieve all assets.
+
+        :param asset_name: <str>
+        :param asset_type: <str>
+
+        :returns:  <list> of assets
+        """
+        cmd = """SELECT * FROM assets WHERE"""
+        name_cmd = " name = :asset_name"
+        type_cmd = " type = :asset_type"
+
+        params = {}
+        if asset_name:
+            params["asset_name"] = asset_name
+            cmd += name_cmd
+        if asset_name and asset_type:
+            cmd += " AND"
+        if asset_type:
+            params["asset_type"] = asset_type
+            cmd += type_cmd
+        cursor = self.session.execute(cmd, params)
+        return cursor.fetchall()
+
     def retrieve_single_asset_version(self,  asset_name: str,
     asset_type: str, department: str, version_num: int) -> tuple[dict | None]:
         """
@@ -332,16 +356,18 @@ class DBManager:
         cursor = self.session.execute(cmd)
         return cursor.fetchall()
     
-    def list_asset_versions(self, asset_name: str,
-    asset_type: str) -> tuple[list[dict], list]:
+    def list_asset_versions(self, asset_name: str, asset_type: str,
+    department: str=None, version: int=None, status: str=None) -> tuple[list[dict], list]:
         """
         List all of an asset's versions by name and type.
 
         :param asset_name: <str> pre-validated name of the asset to retrieve.
         :param asset_type: <str> pre-validated type of asset to retrieve.
+        :param department: <str> optional department parameter.
+        :param verison: <int> optional version parameter
 
         :returns: <array[dict]> array of all asset version records related
-        to a specific asset or an empty array.
+        to provided attributes.
         """
 
         # NOTE We're joining tables but we only want the asset version
@@ -350,13 +376,20 @@ class DBManager:
         cmd = """
             SELECT av.* FROM asset_versions av
             JOIN assets a ON av.asset = a.id
-            WHERE a.name = :asset_name AND a.type = :asset_type;
+            WHERE a.name = :asset_name AND a.type = :asset_type
         """
+        params = {"asset_name": asset_name, "asset_type": asset_type}
+        if department:
+            cmd += " AND av.department = :department"
+            params["department"] = department
+        if version:
+            cmd += " AND av.version = :version"
+            params["version"] = version
+        if status:
+            cmd += " AND av.status = :status"
+            params["status"] = status
 
-        cursor = self.session.execute(
-            cmd,
-            {"asset_name": asset_name, "asset_type": asset_type}
-        )
+        cursor = self.session.execute(cmd, params)
         return cursor.fetchall()
     
     def list_all_asset_versions(self) -> tuple[list[dict], list]:

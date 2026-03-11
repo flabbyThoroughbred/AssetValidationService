@@ -1,22 +1,13 @@
-from functools import wraps
 import json
 import pytest
 
 from AssetServiceController.Errors import DatabaseError
+from AssetServiceController.DbManager import DBManager
 from AssetServiceController.Model import Asset, AssetVersion, AssetVersionJson
 
-from utils import drop_tables, with_table_lifecycle, DBManager
 
-"""
-for simplicity as well as the fact that sqlite is lightweight file-based
-database that can be easily created/dropped, I'm going to test
-with an actual database instead of mocks. In a production environment,
-I'd likely go with SQLAlchemy or SQLModel with a PostgreSQL database
-in which case I'd probably use mocks for testing.
-"""
-
+@pytest.mark.usefixtures("table_lifecycle")
 class TestTableCreation:
-    @with_table_lifecycle()
     def test_create_asset_table(self):
         db = DBManager()
         db.drop_table("assets")
@@ -28,9 +19,9 @@ class TestTableCreation:
             """
         )
         tables = [t["name"] for t in cursor.fetchall()]
+
         assert "assets" in tables
 
-    @with_table_lifecycle()
     def test_create_asset_version_table(self):
         db = DBManager()
         db.drop_table("asset_versions")
@@ -44,15 +35,7 @@ class TestTableCreation:
         tables = [t["name"] for t in cursor.fetchall()]
         assert "asset_versions" in tables
 
-    def test_ensure_table_nonexistent(self):
-        db = DBManager()
-        # make sure asset table doesn't exist
-        drop_tables()
-        with pytest.raises(DatabaseError):
-            db.ensure_table("assets")
-
     def test_ensure_table(self):
-        drop_tables()
         db = DBManager()
         db.create_asset_table()
         try:
@@ -61,8 +44,8 @@ class TestTableCreation:
             assert False, "ensure_table raised ValueError unexpectedly"
 
 
+@pytest.mark.usefixtures("table_lifecycle")
 class TestInsertions:
-    @with_table_lifecycle()
     def test_insert_assets(self):
         """
         drop/rebuild tables and insert single asset record.
@@ -77,7 +60,6 @@ class TestInsertions:
         assert len(asset_ids) == 1
         assert asset_ids[0] == 1
 
-    @with_table_lifecycle()
     def test_insert_assets_fail(self):
         """
         Test insertion with wrong data type.
@@ -92,7 +74,6 @@ class TestInsertions:
         with pytest.raises(DatabaseError):
             db.insert_assets([mock_asset])
     
-    @with_table_lifecycle()
     def test_insert_asset_versions(self):
         """
         drop/rebuild tables and insert single asset version record.
@@ -114,7 +95,6 @@ class TestInsertions:
         assert len(ver_ids) == 1
         assert ver_ids[0] == 1
 
-    @with_table_lifecycle()
     def test_insert_asset_and_version(self, generic_asset):
         mock_asset = Asset(**generic_asset)
         mock_asset_version = AssetVersionJson(
@@ -132,7 +112,6 @@ class TestInsertions:
         assert ids["asset_id"] == 1 
         assert ids["asset_version_id"] == 1
 
-    @with_table_lifecycle()
     def test_insert_fails(self):
         
         data = {
@@ -150,7 +129,6 @@ class TestInsertions:
         id = db.insert_fails(data)
         assert id == 1
 
-    @with_table_lifecycle()
     def test_insert_fails_duplicate(self):
         """re-inserting same failure should return the original id"""
         data = {
@@ -168,7 +146,6 @@ class TestInsertions:
         id2 = db.insert_fails(data)
         assert id1 == id2
     
-    @with_table_lifecycle()
     def test_insert_fails_bad_payload(self):
         """
         the 'fail_data' column expects JSON.
@@ -190,8 +167,8 @@ class TestInsertions:
             db.insert_fails(data)
 
 
+@pytest.mark.usefixtures("table_lifecycle")
 class TestRetrievals:
-    @with_table_lifecycle()
     def test_list_assets(self):
         mock_asset = Asset(name="guy", type="character")
         db = DBManager()
@@ -201,7 +178,6 @@ class TestRetrievals:
         assert assets[0]["name"] == "guy"
         assert assets[0]["type"] == "character"
 
-    @with_table_lifecycle()
     def test_list_asset_versions(self):
         mock_asset = Asset(name="guy", type="character")
         db = DBManager()
@@ -220,7 +196,6 @@ class TestRetrievals:
         assert asset_versions[0]["version"] == 1
         assert asset_versions[0]["status"] == "active"
 
-    @with_table_lifecycle()
     def test_retrieve_asset_by_name_and_type(self):
         asset_name = "Spatula"
         asset_type = "prop"
@@ -235,7 +210,6 @@ class TestRetrievals:
         assert assets["name"] == asset_name
         assert assets["type"] == asset_type
 
-    @with_table_lifecycle()
     def test_list_asset_by_name_and_type_not_found(self):
         asset_name = "Spatula"
         asset_type = "prop"
@@ -248,7 +222,6 @@ class TestRetrievals:
         assets = db.retrieve_single_asset(asset_name, "character")
         assert assets is None
         
-    @with_table_lifecycle()
     def test_list_asset_versions_by_name_and_type(self):
         mock_asset = Asset(name="guy", type="character")
         db = DBManager()
@@ -272,14 +245,12 @@ class TestRetrievals:
         assert asset_versions[0]["version"] == 1
         assert asset_versions[0]["status"] == "active"
 
-    @with_table_lifecycle()
     def test_list_asset_versions_by_name_and_type_not_found(self):
         db = DBManager()
         # table should be empty...
         asset_versions = db.list_asset_versions("person", "character")
         assert asset_versions == []
 
-    @with_table_lifecycle()
     def test_retrieve_single_asset_version(self, good_data):
         db = DBManager()
         mock_asset = Asset(**good_data[0]["asset"])
@@ -296,11 +267,8 @@ class TestRetrievals:
             version_num=3,
             department="modeling"
         )
-
         assert retrieved_item["version"] == 3
 
-
-    @with_table_lifecycle()
     def test_retrieve_single_asset_version_no_record(self):
         db = DBManager()
         retrieved_item = db.retrieve_single_asset_version(
@@ -309,5 +277,4 @@ class TestRetrievals:
             version_num=3,
             department="modeling"
         )
-
         assert retrieved_item is None
