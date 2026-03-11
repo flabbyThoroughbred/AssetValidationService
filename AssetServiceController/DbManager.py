@@ -301,19 +301,21 @@ class DBManager:
 
         :returns:  <list> of assets
         """
-        cmd = """SELECT * FROM assets WHERE"""
-        name_cmd = " name = :asset_name"
-        type_cmd = " type = :asset_type"
-
+        cmd = "SELECT * FROM assets"
+        conditions = []
         params = {}
+        
         if asset_name:
+            conditions.append("name = :asset_name")
             params["asset_name"] = asset_name
-            cmd += name_cmd
-        if asset_name and asset_type:
-            cmd += " AND"
+        
         if asset_type:
+            conditions.append("type = :asset_type")
             params["asset_type"] = asset_type
-            cmd += type_cmd
+        
+        if conditions:
+            cmd += " WHERE " + " AND ".join(conditions)
+
         cursor = self.session.execute(cmd, params)
         return cursor.fetchall()
 
@@ -379,15 +381,19 @@ class DBManager:
             WHERE a.name = :asset_name AND a.type = :asset_type
         """
         params = {"asset_name": asset_name, "asset_type": asset_type}
+        conditions = []
         if department:
-            cmd += " AND av.department = :department"
+            conditions.append("av.department = :department")
             params["department"] = department
         if version:
-            cmd += " AND av.version = :version"
+            conditions.append("av.version = :version")
             params["version"] = version
         if status:
-            cmd += " AND av.status = :status"
+            conditions.append("av.status = :status")
             params["status"] = status
+        
+        if conditions:
+            cmd += " AND " + " AND ".join(conditions)
 
         cursor = self.session.execute(cmd, params)
         return cursor.fetchall()
