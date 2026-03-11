@@ -121,4 +121,7 @@ How to use:
         )
 
 
+    9) List failed database additions - retrieve all assets and asset
+    versions from the database.
+        `aSvc.list_failed_adds()`
 

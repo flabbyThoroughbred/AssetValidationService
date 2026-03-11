@@ -320,7 +320,7 @@ class DBManager:
         return cursor.fetchall()
 
     def retrieve_single_asset_version(self,  asset_name: str,
-    asset_type: str, department: str, version_num: int) -> tuple[dict | None]:
+    asset_type: str, department: str, version_num: int) -> tuple[dict, None]:
         """
         Retrieve a single asset version given asset name, type and version.
 

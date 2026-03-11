@@ -271,7 +271,7 @@ def add_asset_and_version(asset: dict, asset_version: dict, mgr: DBManager) -> i
     return None
 
 @with_db_manager()
-def list_assets(mgr: DBManager) -> tuple[list[dict]|list]:
+def list_assets(mgr: DBManager) -> tuple[list[dict], list]:
     """
     Returns list of all existing assets.
 
@@ -285,7 +285,7 @@ def list_assets(mgr: DBManager) -> tuple[list[dict]|list]:
 
 @with_db_manager()
 def get_assets(asset_name: str=None,
-asset_type: str=None, mgr: DBManager=None) -> tuple[list[dict]|list]:
+asset_type: str=None, mgr: DBManager=None) -> tuple[list[dict], list]:
     """
     Get asset record by name and type.
 
@@ -342,7 +342,7 @@ def get_asset_version(asset_name: str, asset_type: str, department: str,
 
 @with_db_manager()
 def list_asset_versions(asset_name: str, asset_type: str, department: str=None,
-version_num: int=None, status: str=None, mgr: DBManager=None) -> tuple[list[dict]|list]:
+version_num: int=None, status: str=None, mgr: DBManager=None) -> tuple[list[dict], list]:
     """
     Return array of asset version records matching the given asset name and type.
 
@@ -374,3 +374,7 @@ version_num: int=None, status: str=None, mgr: DBManager=None) -> tuple[list[dict
         version=version_num,
         status=status
     )
+
+@with_db_manager()
+def list_failed_adds(mgr: DBManager) -> tuple[list[dict], list]:
+    return mgr.list_all_failed_items()
