@@ -192,6 +192,17 @@ def add_asset(asset_name: str, asset_type: str, mgr: DBManager) -> int:
 
 def add_asset_version(asset_name: str, asset_type: str, department: str,
 version_num: int, status: str) -> int:
+    """
+    <User-facing> Add single asset version to database.
+    
+    :param asset_name: <str> name of asset.
+    :param asset_type: <str> type of asset. Must conform to type AssetType.
+    :param department: <str> name of department. Must conform to Department type.
+    :param verison: <int> version number.
+    :param status: <str> status identifier. Must conform to Status type.
+    
+    :returns: <int> the id of the asset_version created.
+    """
     return _add_asset_version(
         {
             "asset": {"name": asset_name, "type": asset_type},
@@ -205,7 +216,6 @@ version_num: int, status: str) -> int:
 @with_db_manager()
 def _add_asset_version(asset_version: dict, mgr: DBManager) -> int:
     """
-    <User-facing>
     Accepts single asset version payload provided:
         - asset is a field that conforms to an asset payload. Otherwise
         an error is thrown.
